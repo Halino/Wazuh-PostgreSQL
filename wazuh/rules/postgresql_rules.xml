@@ -1,0 +1,88 @@
+<!--
+  PostgreSQL rules for Wazuh (bilingual: English + Italian log messages).
+  Rule IDs 110000-110007 (a dedicated block to avoid clashes with other rulesets).
+  MITRE ATT&CK mappings included where applicable.
+-->
+<group name="postgresql,">
+
+  <!-- Grouping rule: any decoded PostgreSQL log line. -->
+  <rule id="110000" level="0">
+    <decoded_as>postgresql-local</decoded_as>
+    <description>PostgreSQL log message.</description>
+    <group>postgresql,</group>
+  </rule>
+
+  <!-- FATAL / PANIC (EN: FATAL/PANIC, IT: FATALE/PANICO). -->
+  <rule id="110001" level="7">
+    <if_sid>110000</if_sid>
+    <field name="level" type="pcre2">^(FATAL|FATALE|PANIC|PANICO)$</field>
+    <description>PostgreSQL $(level) event: $(message)</description>
+    <group>postgresql,</group>
+  </rule>
+
+  <!-- Authentication failed / permission denied (bilingual). -->
+  <rule id="110002" level="6">
+    <if_sid>110000</if_sid>
+    <match type="pcre2">(?i)permission denied|permesso negato|password authentication failed|autenticazione.*fallita|no pg_hba\.conf entry|nessuna voce.*pg_hba</match>
+    <description>PostgreSQL: authentication failed / permission denied - $(message)</description>
+    <group>postgresql,authentication_failed,</group>
+    <mitre>
+      <id>T1078</id><!-- Valid Accounts -->
+    </mitre>
+  </rule>
+
+  <!-- ERROR (EN: ERROR, IT: ERRORE). Routine application-SQL errors are declassed by 110006. -->
+  <rule id="110003" level="4">
+    <if_sid>110000</if_sid>
+    <field name="level" type="pcre2">^(ERROR|ERRORE)$</field>
+    <description>PostgreSQL error event: $(message)</description>
+    <group>postgresql,</group>
+  </rule>
+
+  <!-- Destructive DDL: DROP / TRUNCATE (needs log_statement = ddl or all).
+       The negative lookahead skips echoed bind values ("Parameters:" / "DETAIL:")
+       so a payload containing the word DROP does not cause a false positive. -->
+  <rule id="110004" level="11">
+    <if_sid>110000</if_sid>
+    <field name="message" type="pcre2">(?i)^(?!parameters:|parametri:|contesto:|context:|detail:|dettagli:|statement:).*(\bDROP\s+(DATABASE|TABLE|SCHEMA|ROLE|USER|TABLESPACE|OWNED)\b|\bTRUNCATE\b)</field>
+    <description>PostgreSQL: DESTRUCTIVE statement - $(message)</description>
+    <group>postgresql,policy_changed,</group>
+    <mitre>
+      <id>T1485</id><!-- Data Destruction -->
+    </mitre>
+  </rule>
+
+  <!-- Privilege / role changes: GRANT / REVOKE / CREATE|ALTER ROLE|USER. -->
+  <rule id="110005" level="7">
+    <if_sid>110000</if_sid>
+    <field name="message" type="pcre2">(?i)^(?!parameters:|parametri:|contesto:|context:|detail:|dettagli:|statement:).*(\b(GRANT|REVOKE)\b|\b(CREATE|ALTER)\s+(ROLE|USER)\b)</field>
+    <description>PostgreSQL: PRIVILEGE / role change - $(message)</description>
+    <group>postgresql,policy_changed,</group>
+    <mitre>
+      <id>T1098</id><!-- Account Manipulation -->
+    </mitre>
+  </rule>
+
+  <!-- Declass routine application-SQL noise to level 0 (constraint / unique violations,
+       deadlocks on app tables, autovacuum, syntax errors) - these are app bugs, not
+       security events, and would otherwise flood via 110003. Tune to taste. -->
+  <rule id="110006" level="0">
+    <if_sid>110003</if_sid>
+    <match type="pcre2">(?i)violates .*constraint|viola il vincolo|duplicate key|valore chiave duplicato|deadlock|autovacuum|syntax error|errore di sintassi|does not exist|non esiste|out of range|fuori.*intervallo</match>
+    <description>PostgreSQL: routine application SQL error (declassed) - $(message)</description>
+    <group>postgresql,</group>
+  </rule>
+
+  <!-- Correlation: repeated auth failures = brute force. PostgreSQL does not always
+       log the source IP (depends on log_connections / log_line_prefix %h), so this is
+       frequency-based rather than same_source_ip. -->
+  <rule id="110007" level="10" frequency="5" timeframe="120">
+    <if_matched_sid>110002</if_matched_sid>
+    <description>PostgreSQL: repeated authentication failures - possible brute force.</description>
+    <group>postgresql,authentication_failures,</group>
+    <mitre>
+      <id>T1110</id><!-- Brute Force -->
+    </mitre>
+  </rule>
+
+</group>

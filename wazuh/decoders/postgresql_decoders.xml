@@ -1,0 +1,31 @@
+<!--
+  PostgreSQL log decoders for Wazuh  (bilingual: English + Italian)
+
+  Why this exists: when PostgreSQL runs under a non-English locale (e.g. lc_messages
+  set to it_IT), the server writes log severities and messages in that language
+  (FATALE / ERRORE / "permesso negato" ...). The stock Wazuh PostgreSQL decoders
+  match English only and silently miss those lines. These decoders parse the
+  stderr/CSV-less "log line prefix" format and the rules match BOTH languages.
+
+  Expected log_line_prefix contains a timestamp, a PID in [brackets] and the level,
+  e.g. the common:  log_line_prefix = '%m [%p] '
+  producing lines like:
+    2026-07-06 11:51:08.113 CEST [2075] LOG:  checkpoint complete: ...
+    2026-07-06 09:14:02.001 CEST [3312] FATAL:  password authentication failed for user "app"
+    2026-07-06 09:14:02.001 CEST [3312] FATALE:  autenticazione con password fallita per l'utente "app"
+
+  Point Wazuh at the PostgreSQL log file (see README) with <log_format>syslog</log_format>.
+-->
+
+<!-- Parent: match a PostgreSQL log line by its "<timestamp> <tz> [<pid>] " prefix. -->
+<decoder name="postgresql-local">
+  <prematch type="pcre2">^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ \S+ \[\d+\] </prematch>
+</decoder>
+
+<!-- Child: extract PID, severity level and the message. The level is language-agnostic
+     here (captured as-is); the rules match both English and Italian severities. -->
+<decoder name="postgresql-local">
+  <parent>postgresql-local</parent>
+  <regex type="pcre2">\[(\d+)\] (\w+):\s+(.*)$</regex>
+  <order>pid,level,message</order>
+</decoder>

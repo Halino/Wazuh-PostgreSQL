@@ -1,0 +1,28 @@
+<!--
+  Snippet for ossec.conf (inside <ossec_config>) on the host that has the
+  PostgreSQL log file - i.e. the Wazuh AGENT installed on the database server
+  (or the manager, if PostgreSQL runs there).
+
+  Adjust the path to your PostgreSQL log directory. Common locations:
+    - Debian/Ubuntu:  /var/log/postgresql/postgresql-*.log
+    - RHEL/Rocky:     /var/lib/pgsql/*/data/log/postgresql-*.log
+    - Custom:         whatever log_directory / log_filename you configured
+-->
+
+<localfile>
+  <log_format>syslog</log_format>
+  <location>/var/log/postgresql/postgresql-*.log</location>
+</localfile>
+
+<!--
+  PostgreSQL side (postgresql.conf) - make sure the server actually logs what
+  you want to detect:
+
+    logging_collector = on
+    log_line_prefix = '%m [%p] '     # timestamp + pid (matches the decoder)
+    log_statement = 'ddl'            # required for DROP/TRUNCATE/GRANT detection (110004/110005)
+    # log_connections = on           # optional: adds source host to auth events
+
+  Decoders and rules load automatically from /var/ossec/etc/decoders/ and
+  /var/ossec/etc/rules/ - no <ruleset> entry needed.
+-->

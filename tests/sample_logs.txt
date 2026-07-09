@@ -1,0 +1,39 @@
+# Sample PostgreSQL log lines for testing with wazuh-logtest
+# Run: /var/ossec/bin/wazuh-logtest
+# Then paste any line below (without the leading "# " comment prefix).
+#
+# These cover BOTH English and Italian (it_IT locale) server messages, which is
+# the point of this ruleset: a PostgreSQL server running under a non-English
+# locale logs FATALE / ERRORE / "permesso negato" etc.
+#
+# Assumes log_line_prefix = '%m [%p] '  (timestamp + [pid]).
+
+# ---- Authentication failed (rule 110002) ----
+# English:
+2026-07-06 09:14:02.001 CEST [3312] FATAL:  password authentication failed for user "app"
+# Italian:
+2026-07-06 09:14:02.001 CEST [3312] FATALE:  autenticazione con password fallita per l'utente "app"
+# Permission denied (EN / IT):
+2026-07-06 09:15:10.220 CEST [3320] ERROR:  permission denied for table secrets
+2026-07-06 09:15:10.220 CEST [3320] ERRORE:  permesso negato per la tabella secrets
+
+# ---- Destructive DDL (rule 110004, needs log_statement = ddl|all) ----
+2026-07-06 10:02:00.500 CEST [4001] LOG:  statement: DROP TABLE customers
+2026-07-06 10:02:30.700 CEST [4002] LOG:  statement: TRUNCATE audit_log
+
+# ---- Privilege / role change (rule 110005) ----
+2026-07-06 10:05:11.900 CEST [4100] LOG:  statement: GRANT ALL ON DATABASE app TO evil
+2026-07-06 10:06:00.100 CEST [4101] LOG:  statement: CREATE ROLE backdoor SUPERUSER LOGIN
+
+# ---- FATAL/PANIC (rule 110001) ----
+2026-07-06 08:00:00.000 CEST [1000] PANIC:  could not write to file "pg_wal/000000010000000000000001"
+
+# ---- Routine app-SQL noise, DECLASSED to level 0 (rule 110006) ----
+2026-07-01 23:44:36.431 CEST [3173] ERROR:  update or delete on table "orders" violates foreign key constraint
+2026-07-01 23:48:17.451 CEST [15228] ERRORE:  un valore chiave duplicato viola il vincolo univoco "profiles_pkey"
+
+# ---- False-positive guard: an echoed bind value containing "DROP" must NOT alert ----
+2026-07-06 10:10:00.000 CEST [4200] DETAIL:  Parameters: $1 = 'please DROP TABLE ignored'
+
+# To exercise the brute-force correlation (110007):
+# - Paste an "authentication failed" line above 5+ times within 120 s.
